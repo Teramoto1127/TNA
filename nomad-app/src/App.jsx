@@ -37,13 +37,15 @@ export default function MapPage() {
   const [spots, setSpots] = useState(INITIAL_SPOTS);
   const [selectedSpot, setSelectedSpot] = useState(null);
 
+  const MAP_STYLE_URL = 'https://osm.gdl.jp/styles/osm-bright-ja/style.json';
+
   // 地図の初期化
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: 'https://demotiles.maplibre.org/style.json',
+      style: MAP_STYLE_URL,
       center: [139.701636, 35.658034],
       zoom: 14,
     });
