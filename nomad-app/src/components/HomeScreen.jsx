@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function HomeScreen({ onGuestEntry, onHostLogin }) {
+export default function HomeScreen({ onGuestEntry, onHostLogin, onUserLogin }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-slate-100 flex flex-col justify-between font-sans">
       <header className="p-6 max-w-7xl mx-auto w-full flex justify-between items-center">
@@ -8,7 +8,7 @@ export default function HomeScreen({ onGuestEntry, onHostLogin }) {
           📍 <span className="text-blue-600">NomadSpot</span>
         </div>
         <button
-          onClick={onHostLogin}
+          onClick={onUserLogin}
           className="text-sm font-bold bg-white text-blue-600 border border-gray-200 px-5 py-2 rounded-full shadow-sm hover:shadow-md transition-all"
         >
           ログイン

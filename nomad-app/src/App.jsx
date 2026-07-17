@@ -43,6 +43,11 @@ export default function App() {
     setCurrentScreen('login');
   };
 
+  const handleUserLoginEntry = () => {
+    setLoginRole('user');
+    setCurrentScreen('login');
+  };
+
   // ログイン処理
   const handleLogin = (e) => {
     e.preventDefault();
@@ -268,6 +273,7 @@ export default function App() {
       <HomeScreen
         onGuestEntry={handleGuestEntry}
         onHostLogin={handleHostLoginEntry}
+        onUserLogin={handleUserLoginEntry}
       />
     );
   }
