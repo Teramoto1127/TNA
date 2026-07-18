@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 
 // Vite環境でCSSの読み込みエラーを防ぐための型チェック無視コメント
@@ -29,6 +29,54 @@ export default function App() {
   // 新規スポット仮ピン & フォーム（ホスト用）
   const [tempMarker, setTempMarker] = useState(null);
   const [newSpotForm, setNewSpotForm] = useState(null);
+
+  // --- お気に入り（ブラウザのlocalStorageで永続化） ---
+  const FAVORITES_STORAGE_KEY = 'nomadspot_favorite_ids';
+  const [favoriteIds, setFavoriteIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem(FAVORITES_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favoriteIds));
+    } catch {
+      // localStorageが使えない環境では何もしない
+    }
+  }, [favoriteIds]);
+
+  const toggleFavorite = (spotId) => {
+    setFavoriteIds((prev) =>
+      prev.includes(spotId) ? prev.filter((id) => id !== spotId) : [...prev, spotId]
+    );
+  };
+
+  // --- 条件フィルター ---
+  const [filters, setFilters] = useState({
+    hasPowerOnly: false,
+    minWifiSpeed: 0,
+    congestionStatuses: ['空席あり', 'やや混雑', '満席'],
+    favoritesOnly: false,
+  });
+
+  const parseWifiSpeed = (wifiSpeed) => {
+    const match = String(wifiSpeed).match(/\d+/);
+    return match ? Number(match[0]) : 0;
+  };
+
+  const filteredSpots = useMemo(() => {
+    return spots.filter((spot) => {
+      if (filters.hasPowerOnly && !spot.hasPower) return false;
+      if (parseWifiSpeed(spot.wifiSpeed) < filters.minWifiSpeed) return false;
+      if (!filters.congestionStatuses.includes(spot.congestion)) return false;
+      if (filters.favoritesOnly && !favoriteIds.includes(spot.id)) return false;
+      return true;
+    });
+  }, [spots, filters, favoriteIds]);
 
   const MAP_STYLE_URL = 'https://osm.gdl.jp/styles/osm-bright-ja/style.json';
 
@@ -137,7 +185,7 @@ export default function App() {
     });
     markersRef.current = {};
 
-    spots.forEach((spot) => {
+    filteredSpots.forEach((spot) => {
       const color =
         spot.congestion === '空席あり' ? '#10B981' :
         spot.congestion === 'やや混雑' ? '#F59E0B' :
@@ -165,7 +213,7 @@ export default function App() {
 
       markersRef.current[spot.id] = marker;
     });
-  }, [spots, currentScreen, tempMarker]);
+  }, [filteredSpots, currentScreen, tempMarker]);
 
   // 現在地ジャンプ（一般ユーザー専用）
   const handleGeoLocation = () => {
@@ -315,6 +363,11 @@ export default function App() {
       handleAddComment={handleAddComment}
       newComment={newComment}
       setNewComment={setNewComment}
+      filters={filters}
+      setFilters={setFilters}
+      visibleSpotCount={filteredSpots.length}
+      favoriteIds={favoriteIds}
+      toggleFavorite={toggleFavorite}
     />
   );
 }
