@@ -1,16 +1,27 @@
 import React from 'react';
 
-export default function SpotDetailPanel({ selectedSpot, loginRole, newComment, setNewComment, handleReport, handleAddComment, setSelectedSpot }) {
+export default function SpotDetailPanel({ selectedSpot, loginRole, newComment, setNewComment, handleReport, handleAddComment, setSelectedSpot, isFavorite, onToggleFavorite }) {
   return (
     <div className="absolute bottom-0 left-0 right-0 z-10 bg-white rounded-t-2xl shadow-2xl p-6 transition-all transform duration-300 max-w-md mx-auto border border-gray-100 max-h-[60vh] overflow-y-auto">
       <div className="flex justify-between items-start mb-2">
         <h2 className="text-xl font-bold text-gray-900">{selectedSpot.name}</h2>
-        <button
-          onClick={() => setSelectedSpot(null)}
-          className="text-gray-400 hover:text-gray-600 text-lg font-bold p-1"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onToggleFavorite(selectedSpot.id)}
+            title={isFavorite ? 'お気に入りから外す' : 'お気に入りに追加'}
+            className={`text-lg font-bold p-1 transition-all ${
+              isFavorite ? 'text-amber-400 hover:text-amber-500' : 'text-gray-300 hover:text-amber-400'
+            }`}
+          >
+            {isFavorite ? '★' : '☆'}
+          </button>
+          <button
+            onClick={() => setSelectedSpot(null)}
+            className="text-gray-400 hover:text-gray-600 text-lg font-bold p-1"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2 mb-4">
