@@ -6,6 +6,7 @@ import FilterPanel from './FilterPanel.jsx';
 export default function MapScreen({
   loginRole,
   username,
+  isLoggedIn,
   handleLogout,
   handleGeoLocation,
   mapContainerRef,
@@ -24,6 +25,7 @@ export default function MapScreen({
   visibleSpotCount,
   favoriteIds,
   toggleFavorite,
+  onLoginPrompt,
 }) {
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const activeFilterCount =
@@ -45,7 +47,11 @@ export default function MapScreen({
           <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${
             loginRole === 'host' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
           }`}>
-            {loginRole === 'host' ? `👑 HOST: ${username}` : '👤 USER モード'}
+            {loginRole === 'host'
+              ? `👑 HOST: ${username}`
+              : isLoggedIn
+                ? `👤 ${username}`
+                : '👤 ゲストモード（閲覧のみ）'}
           </span>
         </div>
 
@@ -69,13 +75,21 @@ export default function MapScreen({
               </span>
             )}
           </button>
+          {loginRole === 'user' && !isLoggedIn && (
+            <button
+              onClick={onLoginPrompt}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-full transition-all shadow-sm"
+            >
+              🔑 ログイン
+            </button>
+          )}
           <button
             onClick={handleLogout}
             className="bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold px-3 py-1.5 rounded-full transition-all"
           >
-            🚪 ログアウト
+            🚪 {isLoggedIn ? 'ログアウト' : 'トップへ戻る'}
           </button>
-          {loginRole === 'user' && (
+          {loginRole === 'user' && isLoggedIn && (
             <div className="bg-yellow-100 text-yellow-800 text-xs px-2.5 py-1.5 rounded-full font-semibold">
               🪙 120 pt
             </div>
@@ -120,6 +134,7 @@ export default function MapScreen({
           setSelectedSpot={setSelectedSpot}
           isFavorite={favoriteIds.includes(selectedSpot.id)}
           onToggleFavorite={toggleFavorite}
+          canInteract={loginRole === 'host' ? true : isLoggedIn}
         />
       )}
     </div>

@@ -8,21 +8,47 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import HomeScreen from './components/HomeScreen.jsx';
 import LoginScreen from './components/LoginScreen.jsx';
 import MapScreen from './components/MapScreen.jsx';
-import { INITIAL_SPOTS } from './data/initialSpots.js';
+import { supabase } from './lib/supabaseClient.js';
+
+// DBの行（snake_case）をアプリ内で使うcamelCase形式に変換
+function transformSpot(spotRow, commentsForSpot = []) {
+  return {
+    id: spotRow.id,
+    name: spotRow.name,
+    lat: spotRow.lat,
+    lng: spotRow.lng,
+    wifiSpeed: spotRow.wifi_speed,
+    hasPower: spotRow.has_power,
+    congestion: spotRow.congestion,
+    updatedAt: spotRow.updated_at,
+    hostId: spotRow.host_id,
+    comments: commentsForSpot.map((c) => c.content),
+  };
+}
+
+const FAVORITES_STORAGE_KEY = 'nomadspot_favorite_ids';
 
 export default function App() {
   // --- 画面切り替え & ログイン用ステート ---
   const [currentScreen, setCurrentScreen] = useState('index'); // 'index' | 'login' | 'map'
   const [loginRole, setLoginRole] = useState(null); // 'user' | 'host'
   const [username, setUsername] = useState('');
+
+  // --- Supabase認証用ステート ---
+  const [currentUser, setCurrentUser] = useState(null); // supabaseのauth.usersの行
+  const [mode, setMode] = useState('login'); // 'login' | 'signup'
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [signupUsername, setSignupUsername] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
 
   // --- マップ・データ用ステート ---
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef({});
 
-  const [spots, setSpots] = useState(INITIAL_SPOTS);
+  const [spots, setSpots] = useState([]);
   const [selectedSpot, setSelectedSpot] = useState(null);
   const [newComment, setNewComment] = useState("");
 
@@ -30,30 +56,9 @@ export default function App() {
   const [tempMarker, setTempMarker] = useState(null);
   const [newSpotForm, setNewSpotForm] = useState(null);
 
-  // --- お気に入り（ブラウザのlocalStorageで永続化） ---
-  const FAVORITES_STORAGE_KEY = 'nomadspot_favorite_ids';
-  const [favoriteIds, setFavoriteIds] = useState(() => {
-    try {
-      const saved = localStorage.getItem(FAVORITES_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favoriteIds));
-    } catch {
-      // localStorageが使えない環境では何もしない
-    }
-  }, [favoriteIds]);
-
-  const toggleFavorite = (spotId) => {
-    setFavoriteIds((prev) =>
-      prev.includes(spotId) ? prev.filter((id) => id !== spotId) : [...prev, spotId]
-    );
-  };
+  // --- お気に入り ---
+  // ログイン中: favoritesテーブル / ゲスト: localStorage にフォールバック
+  const [favoriteIds, setFavoriteIds] = useState([]);
 
   // --- 条件フィルター ---
   const [filters, setFilters] = useState({
@@ -63,6 +68,149 @@ export default function App() {
     favoritesOnly: false,
   });
 
+  const MAP_STYLE_URL = 'https://osm.gdl.jp/styles/osm-bright-ja/style.json';
+
+  // ==========================================
+  // Supabase: プロフィール取得
+  // ==========================================
+  const fetchProfile = async (userId) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('username, role')
+      .eq('id', userId)
+      .single();
+    if (error) {
+      console.error('プロフィール取得エラー:', error);
+      return null;
+    }
+    return data;
+  };
+
+  // ==========================================
+  // Supabase: セッション復元（リロード時に自動ログイン）
+  // ==========================================
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        const profile = await fetchProfile(session.user.id);
+        if (profile) {
+          setCurrentUser(session.user);
+          setUsername(profile.username);
+          setLoginRole(profile.role);
+          setCurrentScreen('map');
+        }
+      }
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  // ==========================================
+  // Supabase: spots / comments の取得 + リアルタイム購読
+  // ==========================================
+  const fetchSpotsAndComments = async () => {
+    const [{ data: spotsData, error: spotsError }, { data: commentsData, error: commentsError }] =
+      await Promise.all([
+        supabase.from('spots').select('*').order('created_at', { ascending: false }),
+        supabase.from('comments').select('*').order('created_at', { ascending: false }),
+      ]);
+
+    if (spotsError) {
+      console.error('スポット取得エラー:', spotsError);
+      return;
+    }
+    if (commentsError) {
+      console.error('口コミ取得エラー:', commentsError);
+    }
+
+    const commentsBySpot = {};
+    (commentsData || []).forEach((c) => {
+      if (!commentsBySpot[c.spot_id]) commentsBySpot[c.spot_id] = [];
+      commentsBySpot[c.spot_id].push(c);
+    });
+
+    setSpots((spotsData || []).map((row) => transformSpot(row, commentsBySpot[row.id] || [])));
+  };
+
+  useEffect(() => {
+    fetchSpotsAndComments();
+
+    const channel = supabase
+      .channel('public:spots-and-comments')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'spots' }, () => {
+        fetchSpotsAndComments();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, () => {
+        fetchSpotsAndComments();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // ==========================================
+  // お気に入りの読み込み（ログイン中はDB、ゲストはlocalStorage）
+  // ==========================================
+  useEffect(() => {
+    const loadFavorites = async () => {
+      if (currentUser) {
+        const { data, error } = await supabase
+          .from('favorites')
+          .select('spot_id')
+          .eq('user_id', currentUser.id);
+        if (!error) setFavoriteIds((data || []).map((f) => f.spot_id));
+      } else {
+        try {
+          const saved = localStorage.getItem(FAVORITES_STORAGE_KEY);
+          setFavoriteIds(saved ? JSON.parse(saved) : []);
+        } catch {
+          setFavoriteIds([]);
+        }
+      }
+    };
+    loadFavorites();
+  }, [currentUser]);
+
+  // ゲスト時のみlocalStorageに同期
+  useEffect(() => {
+    if (!currentUser) {
+      try {
+        localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favoriteIds));
+      } catch {
+        // localStorageが使えない環境では何もしない
+      }
+    }
+  }, [favoriteIds, currentUser]);
+
+  const toggleFavorite = async (spotId) => {
+    const already = favoriteIds.includes(spotId);
+
+    if (currentUser) {
+      if (already) {
+        await supabase.from('favorites').delete().eq('user_id', currentUser.id).eq('spot_id', spotId);
+      } else {
+        await supabase.from('favorites').insert({ user_id: currentUser.id, spot_id: spotId });
+      }
+    }
+
+    setFavoriteIds((prev) =>
+      already ? prev.filter((id) => id !== spotId) : [...prev, spotId]
+    );
+  };
+
+  // ==========================================
+  // 条件フィルター（絞り込み結果）
+  // ==========================================
   const parseWifiSpeed = (wifiSpeed) => {
     const match = String(wifiSpeed).match(/\d+/);
     return match ? Number(match[0]) : 0;
@@ -78,39 +226,121 @@ export default function App() {
     });
   }, [spots, filters, favoriteIds]);
 
-  const MAP_STYLE_URL = 'https://osm.gdl.jp/styles/osm-bright-ja/style.json';
-
+  // ==========================================
   // トップページからのナビゲーション
+  // ==========================================
   const handleGuestEntry = () => {
     setLoginRole('user');
     setCurrentScreen('map');
   };
 
+  const resetAuthForm = () => {
+    setEmail('');
+    setPassword('');
+    setSignupUsername('');
+    setAuthError('');
+    setMode('login');
+  };
+
   const handleHostLoginEntry = () => {
+    resetAuthForm();
     setLoginRole('host');
     setCurrentScreen('login');
   };
 
   const handleUserLoginEntry = () => {
+    resetAuthForm();
     setLoginRole('user');
     setCurrentScreen('login');
   };
 
-  // ログイン処理
-  const handleLogin = (e) => {
+  // ゲスト状態からマップ画面のヘッダー経由でログイン画面へ
+  const handleLoginPromptFromMap = () => {
+    resetAuthForm();
+    setLoginRole('user');
+    setCurrentScreen('login');
+  };
+
+  // ==========================================
+  // Supabase認証: ログイン・新規登録・ログアウト
+  // ==========================================
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (!username.trim()) {
-      alert("ユーザー名を入力してください");
+    setAuthError('');
+    setAuthLoading(true);
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setAuthError('ログインに失敗しました。メールアドレスとパスワードをご確認ください。');
+      setAuthLoading(false);
       return;
     }
+
+    const profile = await fetchProfile(data.user.id);
+    if (!profile) {
+      setAuthError('プロフィール情報の取得に失敗しました。');
+      setAuthLoading(false);
+      return;
+    }
+
+    setCurrentUser(data.user);
+    setUsername(profile.username);
+    setLoginRole(profile.role);
+    setAuthLoading(false);
+    setCurrentScreen('map');
+  };
+
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+
+    if (!signupUsername.trim()) {
+      setAuthError('表示名を入力してください');
+      return;
+    }
+
+    setAuthLoading(true);
+
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) {
+      setAuthError(error.message);
+      setAuthLoading(false);
+      return;
+    }
+
+    if (!data.user) {
+      setAuthError('登録は完了しましたが、確認メールが送信された可能性があります。メール内のリンクから認証を完了してから再度ログインしてください。');
+      setAuthLoading(false);
+      return;
+    }
+
+    const { error: profileError } = await supabase.from('profiles').insert({
+      id: data.user.id,
+      username: signupUsername,
+      role: loginRole,
+    });
+
+    if (profileError) {
+      setAuthError(`プロフィールの作成に失敗しました: ${profileError.message}`);
+      setAuthLoading(false);
+      return;
+    }
+
+    setCurrentUser(data.user);
+    setUsername(signupUsername);
+    setAuthLoading(false);
     setCurrentScreen('map');
   };
 
   // ログアウト処理
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (currentUser) {
+      await supabase.auth.signOut();
+    }
+    setCurrentUser(null);
     setLoginRole(null);
     setUsername('');
-    setPassword('');
+    resetAuthForm();
     setSelectedSpot(null);
     setNewSpotForm(null);
     if (tempMarker) tempMarker.remove();
@@ -172,7 +402,7 @@ export default function App() {
     };
   }, [currentScreen, loginRole, tempMarker]);
 
-  // スポットのピンを地図上に配置
+  // スポットのピンを地図上に配置（絞り込み結果を反映）
   useEffect(() => {
     if (currentScreen !== 'map') return;
     const map = mapRef.current;
@@ -240,77 +470,89 @@ export default function App() {
   };
 
   // 混雑状況のアップデート（一般 or ホストでメッセージを変更）
-  const handleReport = (spotId, status) => {
-    setSpots((prevSpots) =>
-      prevSpots.map((spot) => {
-        if (spot.id === spotId) {
-          const updated = {
-            ...spot,
-            congestion: status,
-            updatedAt: loginRole === 'host' ? "公式たった今" : "たった今"
-          };
-          setSelectedSpot(updated);
-          return updated;
-        }
-        return spot;
-      })
+  const handleReport = async (spotId, status) => {
+    const nowIso = new Date().toISOString();
+    const { error } = await supabase
+      .from('spots')
+      .update({ congestion: status, updated_at: nowIso })
+      .eq('id', spotId);
+
+    if (error) {
+      alert(`更新に失敗しました: ${error.message}`);
+      return;
+    }
+
+    setSelectedSpot((prev) =>
+      prev && prev.id === spotId ? { ...prev, congestion: status, updatedAt: nowIso } : prev
     );
 
     if (loginRole === 'host') {
       alert(`管理店舗の混雑状況を「${status}」に公式更新しました！`);
     } else {
-      alert(`「${status}」の混雑情報を報告しました！10ポイント獲得！`);
+      alert(`「${status}」の混雑情報を報告しました！`);
     }
+    // ※ 他のユーザーの画面へはリアルタイム購読を通じて自動反映されます
   };
 
-  // 口コミの追加（一般ユーザー限定）
-  const handleAddComment = (e) => {
+  // 口コミの追加（ログイン中の一般ユーザー限定）
+  const handleAddComment = async (e) => {
     e.preventDefault();
-    if (!newComment.trim()) return;
+    if (!newComment.trim() || !selectedSpot || !currentUser) return;
 
-    setSpots((prevSpots) =>
-      prevSpots.map((spot) => {
-        if (spot.id === selectedSpot.id) {
-          const updatedComments = [newComment, ...(spot.comments || [])];
-          const updated = { ...spot, comments: updatedComments };
-          setSelectedSpot(updated);
-          return updated;
-        }
-        return spot;
-      })
-    );
+    const { error } = await supabase.from('comments').insert({
+      spot_id: selectedSpot.id,
+      user_id: currentUser.id,
+      content: newComment,
+    });
+
+    if (error) {
+      alert(`投稿に失敗しました: ${error.message}`);
+      return;
+    }
+
     setNewComment("");
+    // ※ 一覧への反映はリアルタイム購読経由で行われます
   };
 
   // 新規スポットの追加（ホスト限定）
-  const handleCreateSpot = (e) => {
+  const handleCreateSpot = async (e) => {
     e.preventDefault();
     if (!newSpotForm.name.trim()) {
       alert("店舗名を入力してください");
       return;
     }
+    if (!currentUser) {
+      alert("ログインが必要です");
+      return;
+    }
 
-    const newSpot = {
-      id: Date.now().toString(),
-      name: newSpotForm.name,
-      lat: newSpotForm.lat,
-      lng: newSpotForm.lng,
-      wifiSpeed: newSpotForm.wifiSpeed,
-      hasPower: newSpotForm.hasPower,
-      congestion: newSpotForm.congestion,
-      updatedAt: "公式登録直後",
-      hostId: username,
-      comments: []
-    };
+    const { data, error } = await supabase
+      .from('spots')
+      .insert({
+        name: newSpotForm.name,
+        lat: newSpotForm.lat,
+        lng: newSpotForm.lng,
+        wifi_speed: newSpotForm.wifiSpeed,
+        has_power: newSpotForm.hasPower,
+        congestion: newSpotForm.congestion,
+        host_id: currentUser.id,
+      })
+      .select()
+      .single();
 
-    setSpots((prev) => [newSpot, ...prev]);
     setNewSpotForm(null);
     if (tempMarker) {
       tempMarker.remove();
       setTempMarker(null);
     }
-    setSelectedSpot(newSpot);
-    alert(`新店舗「${newSpot.name}」をマップに登録しました！`);
+
+    if (error) {
+      alert(`登録に失敗しました: ${error.message}`);
+      return;
+    }
+
+    setSelectedSpot(transformSpot(data, []));
+    alert(`新店舗「${data.name}」をマップに登録しました！`);
   };
 
   // ==========================================
@@ -327,17 +569,24 @@ export default function App() {
   }
 
   // ==========================================
-  // 2. ログイン画面
+  // 2. ログイン / 新規登録画面
   // ==========================================
   if (currentScreen === 'login') {
     return (
       <LoginScreen
         loginRole={loginRole}
-        username={username}
+        mode={mode}
+        setMode={setMode}
+        email={email}
+        setEmail={setEmail}
         password={password}
-        setUsername={setUsername}
         setPassword={setPassword}
+        signupUsername={signupUsername}
+        setSignupUsername={setSignupUsername}
         handleLogin={handleLogin}
+        handleSignup={handleSignup}
+        authError={authError}
+        authLoading={authLoading}
         onBack={() => setCurrentScreen('index')}
       />
     );
@@ -350,6 +599,7 @@ export default function App() {
     <MapScreen
       loginRole={loginRole}
       username={username}
+      isLoggedIn={Boolean(currentUser)}
       handleLogout={handleLogout}
       handleGeoLocation={handleGeoLocation}
       mapContainerRef={mapContainerRef}
@@ -368,6 +618,7 @@ export default function App() {
       visibleSpotCount={filteredSpots.length}
       favoriteIds={favoriteIds}
       toggleFavorite={toggleFavorite}
+      onLoginPrompt={handleLoginPromptFromMap}
     />
   );
 }

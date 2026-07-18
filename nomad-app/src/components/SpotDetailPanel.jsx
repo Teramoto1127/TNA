@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function SpotDetailPanel({ selectedSpot, loginRole, newComment, setNewComment, handleReport, handleAddComment, setSelectedSpot, isFavorite, onToggleFavorite }) {
+export default function SpotDetailPanel({ selectedSpot, loginRole, newComment, setNewComment, handleReport, handleAddComment, setSelectedSpot, isFavorite, onToggleFavorite, canInteract }) {
   return (
     <div className="absolute bottom-0 left-0 right-0 z-10 bg-white rounded-t-2xl shadow-2xl p-6 transition-all transform duration-300 max-w-md mx-auto border border-gray-100 max-h-[60vh] overflow-y-auto">
       <div className="flex justify-between items-start mb-2">
@@ -51,26 +51,32 @@ export default function SpotDetailPanel({ selectedSpot, loginRole, newComment, s
       <p className="text-xs font-bold text-gray-700 mb-2">
         {loginRole === 'host' ? '📢 【公式権限】店舗のリアルタイム混雑度を更新' : '📢 今ココにいる？状況を教えてポイントGET！'}
       </p>
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        {['空席あり', 'やや混雑', '満席'].map((status) => (
-          <button
-            key={status}
-            onClick={() => handleReport(selectedSpot.id, status)}
-            className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all shadow-sm ${
-              status === '空席あり' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 active:bg-emerald-100' :
-              status === 'やや混雑' ? 'bg-amber-50 text-amber-700 border border-amber-200 active:bg-amber-100' :
-              'bg-rose-50 text-rose-700 border border-rose-200 active:bg-rose-100'
-            }`}
-          >
-            {status === '空席あり' ? '🟢 余裕' : status === 'やや混雑' ? '🟡 やや混' : '🔴 満席'}
-          </button>
-        ))}
-      </div>
+      {canInteract ? (
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          {['空席あり', 'やや混雑', '満席'].map((status) => (
+            <button
+              key={status}
+              onClick={() => handleReport(selectedSpot.id, status)}
+              className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all shadow-sm ${
+                status === '空席あり' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 active:bg-emerald-100' :
+                status === 'やや混雑' ? 'bg-amber-50 text-amber-700 border border-amber-200 active:bg-amber-100' :
+                'bg-rose-50 text-rose-700 border border-rose-200 active:bg-rose-100'
+              }`}
+            >
+              {status === '空席あり' ? '🟢 余裕' : status === 'やや混雑' ? '🟡 やや混' : '🔴 満席'}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[10px] text-gray-400 mb-4 bg-gray-50 p-2 rounded-lg">
+          ※ログインすると混雑状況を報告できます。
+        </p>
+      )}
 
       <div className="border-t border-gray-100 pt-3">
         <h4 className="text-xs font-bold text-gray-900 mb-2">💬 みんなの口コミ</h4>
 
-        {loginRole === 'user' ? (
+        {loginRole === 'user' && canInteract ? (
           <form onSubmit={handleAddComment} className="flex gap-2 mb-3">
             <input
               type="text"
