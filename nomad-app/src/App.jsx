@@ -382,7 +382,7 @@ export default function App() {
       if (tempMarkerRef.current) tempMarkerRef.current.remove();
 
       const el = document.createElement('div');
-      el.className = 'w-8 h-8 rounded-full bg-indigo-600 border-2 border-white shadow-xl flex items-center justify-center text-white font-bold text-lg animate-bounce cursor-pointer';
+      el.className = 'w-8 h-8 rounded-full bg-indigo-600 border-2 border-white shadow-xl flex items-center justify-center text-white font-bold text-lg animate-pulse cursor-pointer';
       el.innerText = '＋';
 
       const marker = new maplibregl.Marker({ element: el })
@@ -449,7 +449,7 @@ export default function App() {
       }
 
       const el = document.createElement('div');
-      el.className = 'w-6 h-6 rounded-full border-2 border-white shadow-lg cursor-pointer flex items-center justify-center text-white text-xs font-bold transition-transform hover:scale-110';
+      el.className = 'w-6 h-6 rounded-full border-2 border-white shadow-lg cursor-pointer flex items-center justify-center text-white text-xs font-bold transition-shadow hover:brightness-110 hover:shadow-xl';
       el.style.backgroundColor = color;
       el.innerText = spot.hasPower ? '⚡' : '☕';
 
