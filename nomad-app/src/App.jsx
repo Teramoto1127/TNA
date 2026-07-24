@@ -54,6 +54,10 @@ export default function App() {
 
   // 新規スポット仮ピン & フォーム（ホスト用）
   const [tempMarker, setTempMarker] = useState(null);
+  const tempMarkerRef = useRef(null);
+  useEffect(() => {
+    tempMarkerRef.current = tempMarker;
+  }, [tempMarker]);
   const [newSpotForm, setNewSpotForm] = useState(null);
 
   // --- お気に入り ---
@@ -349,6 +353,9 @@ export default function App() {
   };
 
   // 地図の初期化 (マップ画面が表示された時のみ実行)
+  // ※ 以前は tempMarker を依存配列に含めていたため、ホストが仮ピンを置く/消すたびに
+  //   地図インスタンスごと（＝既存の全スポットマーカーも道連れで）作り直されていた。
+  //   tempMarkerRef経由で最新値を参照することで、地図自体は画面遷移時にのみ初期化する。
   useEffect(() => {
     if (currentScreen !== 'map' || !mapContainerRef.current) return;
 
@@ -372,10 +379,10 @@ export default function App() {
       const { lng, lat } = e.lngLat;
 
       // 既存の仮ピンを削除
-      if (tempMarker) tempMarker.remove();
+      if (tempMarkerRef.current) tempMarkerRef.current.remove();
 
       const el = document.createElement('div');
-      el.className = 'w-8 h-8 rounded-full bg-indigo-600 border-2 border-white shadow-xl flex items-center justify-center text-white font-bold text-lg animate-bounce cursor-pointer';
+      el.className = 'w-8 h-8 rounded-full bg-indigo-600 border-2 border-white shadow-xl flex items-center justify-center text-white font-bold text-lg animate-pulse cursor-pointer';
       el.innerText = '＋';
 
       const marker = new maplibregl.Marker({ element: el })
@@ -400,20 +407,29 @@ export default function App() {
         mapRef.current = null;
       }
     };
-  }, [currentScreen, loginRole, tempMarker]);
+  }, [currentScreen, loginRole]);
 
   // スポットのピンを地図上に配置（絞り込み結果を反映）
+  // ※ 以前は毎回すべてのマーカーを消してから作り直していたため、
+  //   リアルタイム更新（他のユーザーの操作）が届いたタイミングでクリックすると
+  //   作り直し中のマーカーにクリックが当たらず、別のスポットが選択されたり
+  //   意図しない場所へ地図がパンしてしまう不具合があった。
+  //   そのため、IDをキーにして「存在するものは中身だけ更新・存在しないものだけ追加/削除」
+  //   という差分更新方式に変更する。
   useEffect(() => {
     if (currentScreen !== 'map') return;
     const map = mapRef.current;
     if (!map) return;
 
-    // 既存のマーカーをクリア
-    const activeMarkers = Object.values(markersRef.current);
-    activeMarkers.forEach((marker) => {
-      if (marker) marker.remove();
+    const currentIds = new Set(filteredSpots.map((s) => s.id));
+
+    // 表示対象から外れたスポットのマーカーだけを削除
+    Object.keys(markersRef.current).forEach((id) => {
+      if (!currentIds.has(id)) {
+        markersRef.current[id].marker.remove();
+        delete markersRef.current[id];
+      }
     });
-    markersRef.current = {};
 
     filteredSpots.forEach((spot) => {
       const color =
@@ -421,29 +437,61 @@ export default function App() {
         spot.congestion === 'やや混雑' ? '#F59E0B' :
         '#EF4444';
 
+      const existing = markersRef.current[spot.id];
+
+      if (existing) {
+        // 既存マーカーは見た目とクリックハンドラ参照用データだけ更新（DOM要素は作り直さない）
+        existing.el.style.backgroundColor = color;
+        existing.el.innerText = spot.hasPower ? '⚡' : '☕';
+        existing.marker.setLngLat([spot.lng, spot.lat]);
+        existing.spotRef.current = spot;
+        return;
+      }
+
       const el = document.createElement('div');
-      el.className = 'w-6 h-6 rounded-full border-2 border-white shadow-lg cursor-pointer flex items-center justify-center text-white text-xs font-bold transition-transform hover:scale-110';
+      el.className = 'w-6 h-6 rounded-full border-2 border-white shadow-lg cursor-pointer flex items-center justify-center text-white text-xs font-bold transition-shadow hover:brightness-110 hover:shadow-xl';
       el.style.backgroundColor = color;
       el.innerText = spot.hasPower ? '⚡' : '☕';
+
+      // クリックハンドラは常に最新のspotを参照できるようrefで持つ
+      const spotRef = { current: spot };
 
       const marker = new maplibregl.Marker({ element: el })
         .setLngLat([spot.lng, spot.lat])
         .addTo(map);
 
+      // ピンの上でマウス/指を押した時点で、地図側のドラッグパン判定に
+      // イベントが渡らないようにする（クリックのつもりが数px動いてしまい
+      // 「ドラッグ」と認識されて地図が動いてしまう問題への対処）
+      el.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+      });
+      el.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+      }, { passive: true });
+
       el.addEventListener('click', (e) => {
         e.stopPropagation();
-        setSelectedSpot(spot);
+        const latestSpot = spotRef.current;
+        setSelectedSpot(latestSpot);
         setNewSpotForm(null);
-        if (tempMarker) {
-          tempMarker.remove();
+        if (tempMarkerRef.current) {
+          tempMarkerRef.current.remove();
           setTempMarker(null);
         }
-        map.easeTo({ center: [spot.lng, spot.lat], zoom: 15 });
+        // ヘッダーと画面下部の詳細パネル（最大で画面の60%）に隠れないよう、
+        // 見える範囲の中にピンが来るようpaddingを指定してパンする
+        const viewportHeight = mapContainerRef.current?.clientHeight || window.innerHeight;
+        map.easeTo({
+          center: [latestSpot.lng, latestSpot.lat],
+          zoom: 15,
+          padding: { top: 90, bottom: viewportHeight * 0.6, left: 0, right: 0 },
+        });
       });
 
-      markersRef.current[spot.id] = marker;
+      markersRef.current[spot.id] = { marker, el, spotRef };
     });
-  }, [filteredSpots, currentScreen, tempMarker]);
+  }, [filteredSpots, currentScreen]);
 
   // 現在地ジャンプ（一般ユーザー専用）
   const handleGeoLocation = () => {
