@@ -35,10 +35,8 @@ export default function MapScreen({
   openEditSpot,
   handleUpdateSpot,
   handleDeleteSpot,
-  onManualAddSpot,   // ← この行を追加
+  onManualAddSpot,
 }) {
-  console.log('現在のloginRoleの値:', JSON.stringify(loginRole)); // ← 一時的に追加
-  
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const activeFilterCount =
     (filters.hasPowerOnly ? 1 : 0) +
@@ -77,7 +75,6 @@ export default function MapScreen({
             </button>
           )}
 
-               {/* ↓↓↓ ここに追加 ↓↓↓ */}
           {loginRole === 'host' && (
             <button
               onClick={onManualAddSpot}
@@ -86,7 +83,7 @@ export default function MapScreen({
               📝 手動で追加
             </button>
           )}
-          {/* ↑↑↑ ここまで ↑↑↑ */}
+
           <button
             onClick={() => setShowFilterPanel((prev) => !prev)}
             className="relative bg-white border border-gray-200 hover:border-gray-300 text-gray-700 text-xs font-bold px-3 py-1.5 rounded-full transition-all shadow-sm"
