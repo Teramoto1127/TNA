@@ -24,10 +24,10 @@ export default function MapScreen({
   handleDeleteComment,
   newComment,
   setNewComment,
-  filters,
+  filters = {}, // 安全対策: デフォルト値を空オブジェクトに
   setFilters,
   visibleSpotCount,
-  favoriteIds,
+  favoriteIds = [], // 安全対策: デフォルト値を空配列に
   toggleFavorite,
   onLoginPrompt,
   editSpotForm,
@@ -35,16 +35,18 @@ export default function MapScreen({
   openEditSpot,
   handleUpdateSpot,
   handleDeleteSpot,
-  onManualAddSpot,   // ← この行を追加
+  onManualAddSpot,
 }) {
-  console.log('現在のloginRoleの値:', JSON.stringify(loginRole)); // ← 一時的に追加
-  
+  console.log('現在のloginRoleの値:', JSON.stringify(loginRole));
+
   const [showFilterPanel, setShowFilterPanel] = useState(false);
+
+  // 安全対策: filters や congestionStatuses が undefined でも落ちないように保護
   const activeFilterCount =
-    (filters.hasPowerOnly ? 1 : 0) +
-    (filters.favoritesOnly ? 1 : 0) +
-    (filters.minWifiSpeed > 0 ? 1 : 0) +
-    (filters.congestionStatuses.length < 3 ? 1 : 0);
+    (filters?.hasPowerOnly ? 1 : 0) +
+    (filters?.favoritesOnly ? 1 : 0) +
+    ((filters?.minWifiSpeed ?? 0) > 0 ? 1 : 0) +
+    ((filters?.congestionStatuses?.length ?? 3) < 3 ? 1 : 0);
 
   return (
     <div className="relative w-screen h-screen overflow-hidden font-sans">
@@ -56,9 +58,11 @@ export default function MapScreen({
           >
             📍 <span className="text-blue-600">NomadSpot</span>
           </h1>
-          <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${
-            loginRole === 'host' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-          }`}>
+          <span
+            className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${
+              loginRole === 'host' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+            }`}
+          >
             {loginRole === 'host'
               ? `👑 HOST: ${username}`
               : isLoggedIn
@@ -77,7 +81,6 @@ export default function MapScreen({
             </button>
           )}
 
-               {/* ↓↓↓ ここに追加 ↓↓↓ */}
           {loginRole === 'host' && (
             <button
               onClick={onManualAddSpot}
@@ -86,7 +89,7 @@ export default function MapScreen({
               📝 手動で追加
             </button>
           )}
-          {/* ↑↑↑ ここまで ↑↑↑ */}
+
           <button
             onClick={() => setShowFilterPanel((prev) => !prev)}
             className="relative bg-white border border-gray-200 hover:border-gray-300 text-gray-700 text-xs font-bold px-3 py-1.5 rounded-full transition-all shadow-sm"
@@ -166,7 +169,8 @@ export default function MapScreen({
           handleAddComment={handleAddComment}
           handleDeleteComment={handleDeleteComment}
           setSelectedSpot={setSelectedSpot}
-          isFavorite={favoriteIds.includes(selectedSpot.id)}
+          /* 安全対策: favoriteIds が配列でない場合もincludesエラーを出さずに落ちないよう保護 */
+          isFavorite={Array.isArray(favoriteIds) ? favoriteIds.includes(selectedSpot.id) : false}
           onToggleFavorite={toggleFavorite}
           canInteract={loginRole === 'host' ? true : isLoggedIn}
           onEditSpot={openEditSpot}
