@@ -35,6 +35,7 @@ export default function MapScreen({
   openEditSpot,
   handleUpdateSpot,
   handleDeleteSpot,
+  onManualAddSpot,   // ← この行を追加
 }) {
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const activeFilterCount =
@@ -73,6 +74,17 @@ export default function MapScreen({
               🎯 現在地
             </button>
           )}
+
+               {/* ↓↓↓ ここに追加 ↓↓↓ */}
+          {loginRole === 'host' && (
+            <button
+              onClick={onManualAddSpot}
+              className="bg-white border border-gray-200 hover:border-gray-300 text-gray-700 text-xs font-bold px-3 py-1.5 rounded-full transition-all shadow-sm"
+            >
+              📝 手動で追加
+            </button>
+          )}
+          {/* ↑↑↑ ここまで ↑↑↑ */}
           <button
             onClick={() => setShowFilterPanel((prev) => !prev)}
             className="relative bg-white border border-gray-200 hover:border-gray-300 text-gray-700 text-xs font-bold px-3 py-1.5 rounded-full transition-all shadow-sm"

@@ -24,6 +24,35 @@ export default function NewSpotModal({ newSpotForm, setNewSpotForm, handleCreate
             className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
+
+        {/* 緯度・経度を手動入力できるように追加。
+            地図クリックで開いた場合はその座標が自動で入るが、
+            手動登録ボタンから開いた場合はここで直接数値を書き換えて任意の場所に登録できる */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-[10px] font-bold text-gray-500 mb-1">緯度 (lat)</label>
+            <input
+              type="number"
+              step="0.000001"
+              required
+              value={newSpotForm.lat}
+              onChange={(e) => setNewSpotForm({ ...newSpotForm, lat: parseFloat(e.target.value) })}
+              className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-gray-500 mb-1">経度 (lng)</label>
+            <input
+              type="number"
+              step="0.000001"
+              required
+              value={newSpotForm.lng}
+              onChange={(e) => setNewSpotForm({ ...newSpotForm, lng: parseFloat(e.target.value) })}
+              className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+        </div>
+
         <div>
           <label className="block text-[10px] font-bold text-gray-500 mb-1">Wi-Fi速度目安</label>
           <input
