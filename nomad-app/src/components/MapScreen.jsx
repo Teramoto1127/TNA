@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import NewSpotModal from './NewSpotModal.jsx';
+import EditSpotModal from './EditSpotModal.jsx';
 import SpotDetailPanel from './SpotDetailPanel.jsx';
 import FilterPanel from './FilterPanel.jsx';
 
@@ -7,6 +8,7 @@ export default function MapScreen({
   loginRole,
   username,
   isLoggedIn,
+  currentUserId,
   handleLogout,
   handleGeoLocation,
   mapContainerRef,
@@ -17,7 +19,9 @@ export default function MapScreen({
   tempMarker,
   handleCreateSpot,
   handleReport,
+  handleDeleteReport,
   handleAddComment,
+  handleDeleteComment,
   newComment,
   setNewComment,
   filters,
@@ -26,6 +30,11 @@ export default function MapScreen({
   favoriteIds,
   toggleFavorite,
   onLoginPrompt,
+  editSpotForm,
+  setEditSpotForm,
+  openEditSpot,
+  handleUpdateSpot,
+  handleDeleteSpot,
 }) {
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const activeFilterCount =
@@ -123,18 +132,31 @@ export default function MapScreen({
         />
       )}
 
+      {editSpotForm && loginRole === 'host' && (
+        <EditSpotModal
+          editSpotForm={editSpotForm}
+          setEditSpotForm={setEditSpotForm}
+          handleUpdateSpot={handleUpdateSpot}
+        />
+      )}
+
       {selectedSpot && (
         <SpotDetailPanel
           selectedSpot={selectedSpot}
           loginRole={loginRole}
+          currentUserId={currentUserId}
           newComment={newComment}
           setNewComment={setNewComment}
           handleReport={handleReport}
+          handleDeleteReport={handleDeleteReport}
           handleAddComment={handleAddComment}
+          handleDeleteComment={handleDeleteComment}
           setSelectedSpot={setSelectedSpot}
           isFavorite={favoriteIds.includes(selectedSpot.id)}
           onToggleFavorite={toggleFavorite}
           canInteract={loginRole === 'host' ? true : isLoggedIn}
+          onEditSpot={openEditSpot}
+          onDeleteSpot={handleDeleteSpot}
         />
       )}
     </div>

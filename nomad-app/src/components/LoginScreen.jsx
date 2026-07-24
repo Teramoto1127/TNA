@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export default function LoginScreen({
   loginRole,
@@ -15,8 +15,66 @@ export default function LoginScreen({
   authError,
   authLoading,
   onBack,
+  resetEmail,
+  setResetEmail,
+  resetEmailSent,
+  handleForgotPassword,
 }) {
   const isSignup = mode === 'signup';
+  const [forgotMode, setForgotMode] = useState(false);
+
+  if (forgotMode) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-gray-100">
+          <button
+            onClick={() => setForgotMode(false)}
+            className="text-xs text-gray-400 hover:text-gray-600 font-bold mb-4 inline-block"
+          >
+            ← ログインに戻る
+          </button>
+          <h2 className="text-2xl font-black text-gray-900 mb-2">🔑 パスワードをお忘れの方</h2>
+          <p className="text-xs text-gray-500 mb-6 leading-relaxed">
+            登録済みのメールアドレスに、パスワード再設定用のリンクを送信します。
+          </p>
+
+          {resetEmailSent ? (
+            <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+              メールを送信しました。届いたメール内のリンクから新しいパスワードを設定してください。
+            </p>
+          ) : (
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">メールアドレス</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="例: taro@example.com"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {authError && (
+                <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg p-2">
+                  {authError}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold py-3 rounded-xl text-sm transition-all shadow-md"
+              >
+                {authLoading ? '送信中...' : '再設定メールを送る'}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
@@ -109,6 +167,16 @@ export default function LoginScreen({
             {authLoading ? '処理中...' : isSignup ? 'アカウントを作成する' : 'ログインしてマップを開く'}
           </button>
         </form>
+
+        {!isSignup && (
+          <button
+            type="button"
+            onClick={() => setForgotMode(true)}
+            className="w-full text-center text-xs text-gray-400 hover:text-gray-600 font-bold mt-4"
+          >
+            パスワードをお忘れですか？
+          </button>
+        )}
       </div>
     </div>
   );

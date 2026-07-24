@@ -7,11 +7,19 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 
 import HomeScreen from './components/HomeScreen.jsx';
 import LoginScreen from './components/LoginScreen.jsx';
+import ResetPasswordScreen from './components/ResetPasswordScreen.jsx';
 import MapScreen from './components/MapScreen.jsx';
 import { supabase } from './lib/supabaseClient.js';
 
 // DBの行（snake_case）をアプリ内で使うcamelCase形式に変換
-function transformSpot(spotRow, commentsForSpot = []) {
+// latestReport: congestion_reports の中でそのスポットに対する最新の1件（なければnull）
+// ホストが直接更新した時刻(spotRow.updated_at)と、一般ユーザーの最新報告時刻を比較し、
+// より新しい方を「現在表示する混雑状況」として採用する
+function transformSpot(spotRow, commentsForSpot = [], latestReport = null) {
+  const baselineTime = spotRow.updated_at ? new Date(spotRow.updated_at).getTime() : 0;
+  const reportTime = latestReport ? new Date(latestReport.created_at).getTime() : -1;
+  const useReport = reportTime > baselineTime;
+
   return {
     id: spotRow.id,
     name: spotRow.name,
@@ -19,10 +27,20 @@ function transformSpot(spotRow, commentsForSpot = []) {
     lng: spotRow.lng,
     wifiSpeed: spotRow.wifi_speed,
     hasPower: spotRow.has_power,
-    congestion: spotRow.congestion,
-    updatedAt: spotRow.updated_at,
+    congestion: useReport ? latestReport.status : spotRow.congestion,
+    updatedAt: useReport ? latestReport.created_at : spotRow.updated_at,
     hostId: spotRow.host_id,
-    comments: commentsForSpot.map((c) => c.content),
+    // 直近の混雑報告が「一般ユーザーの報告」由来である場合だけ、その報告のIDと投稿者を持つ
+    // （ホストの公式更新の場合はnull＝取り消しボタンを出さない）
+    latestReportId: useReport ? latestReport.id : null,
+    latestReportUserId: useReport ? latestReport.user_id : null,
+    comments: commentsForSpot.map((c) => ({
+      id: c.id,
+      content: c.content,
+      username: c.profiles?.username || '匿名ユーザー',
+      createdAt: c.created_at,
+      userId: c.user_id,
+    })),
   };
 }
 
@@ -43,6 +61,11 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
+  // --- パスワードリセット用ステート ---
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+
   // --- マップ・データ用ステート ---
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
@@ -59,6 +82,8 @@ export default function App() {
     tempMarkerRef.current = tempMarker;
   }, [tempMarker]);
   const [newSpotForm, setNewSpotForm] = useState(null);
+  // ホストが自分のスポットを編集する際のフォーム（{ id, name, wifiSpeed, hasPower }）
+  const [editSpotForm, setEditSpotForm] = useState(null);
 
   // --- お気に入り ---
   // ログイン中: favoritesテーブル / ゲスト: localStorage にフォールバック
@@ -110,6 +135,10 @@ export default function App() {
       if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
       }
+      // メール内のパスワードリセットリンクを踏んで戻ってきた時に発火する
+      if (event === 'PASSWORD_RECOVERY') {
+        setCurrentScreen('resetPassword');
+      }
     });
 
     return () => {
@@ -118,14 +147,18 @@ export default function App() {
   }, []);
 
   // ==========================================
-  // Supabase: spots / comments の取得 + リアルタイム購読
+  // Supabase: spots / comments / congestion_reports の取得 + リアルタイム購読
   // ==========================================
-  const fetchSpotsAndComments = async () => {
-    const [{ data: spotsData, error: spotsError }, { data: commentsData, error: commentsError }] =
-      await Promise.all([
-        supabase.from('spots').select('*').order('created_at', { ascending: false }),
-        supabase.from('comments').select('*').order('created_at', { ascending: false }),
-      ]);
+  const fetchAllData = async () => {
+    const [
+      { data: spotsData, error: spotsError },
+      { data: commentsData, error: commentsError },
+      { data: reportsData, error: reportsError },
+    ] = await Promise.all([
+      supabase.from('spots').select('*').order('created_at', { ascending: false }),
+      supabase.from('comments').select('*, profiles(username)').order('created_at', { ascending: false }),
+      supabase.from('congestion_reports').select('*').order('created_at', { ascending: false }),
+    ]);
 
     if (spotsError) {
       console.error('スポット取得エラー:', spotsError);
@@ -134,6 +167,9 @@ export default function App() {
     if (commentsError) {
       console.error('口コミ取得エラー:', commentsError);
     }
+    if (reportsError) {
+      console.error('混雑報告取得エラー:', reportsError);
+    }
 
     const commentsBySpot = {};
     (commentsData || []).forEach((c) => {
@@ -141,19 +177,32 @@ export default function App() {
       commentsBySpot[c.spot_id].push(c);
     });
 
-    setSpots((spotsData || []).map((row) => transformSpot(row, commentsBySpot[row.id] || [])));
+    // reportsDataはcreated_at降順なので、spot_idごとに最初に出てきたものが最新の報告
+    const latestReportBySpot = {};
+    (reportsData || []).forEach((r) => {
+      if (!latestReportBySpot[r.spot_id]) latestReportBySpot[r.spot_id] = r;
+    });
+
+    setSpots(
+      (spotsData || []).map((row) =>
+        transformSpot(row, commentsBySpot[row.id] || [], latestReportBySpot[row.id] || null)
+      )
+    );
   };
 
   useEffect(() => {
-    fetchSpotsAndComments();
+    fetchAllData();
 
     const channel = supabase
       .channel('public:spots-and-comments')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'spots' }, () => {
-        fetchSpotsAndComments();
+        fetchAllData();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, () => {
-        fetchSpotsAndComments();
+        fetchAllData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'congestion_reports' }, () => {
+        fetchAllData();
       })
       .subscribe();
 
@@ -334,6 +383,46 @@ export default function App() {
     setUsername(signupUsername);
     setAuthLoading(false);
     setCurrentScreen('map');
+  };
+
+  // パスワード再設定メールの送信
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    if (!resetEmail.trim()) {
+      setAuthError('メールアドレスを入力してください');
+      return;
+    }
+    setAuthLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      redirectTo: window.location.origin,
+    });
+    setAuthLoading(false);
+    if (error) {
+      setAuthError(error.message);
+      return;
+    }
+    setResetEmailSent(true);
+  };
+
+  // メール内のリンクから戻ってきた後、新しいパスワードを設定する
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    if (newPassword.length < 6) {
+      setAuthError('パスワードは6文字以上にしてください');
+      return;
+    }
+    setAuthLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setAuthLoading(false);
+    if (error) {
+      setAuthError(error.message);
+      return;
+    }
+    setNewPassword('');
+    alert('パスワードを更新しました。');
+    setCurrentScreen(currentUser ? 'map' : 'index');
   };
 
   // ログアウト処理
@@ -517,29 +606,72 @@ export default function App() {
     );
   };
 
-  // 混雑状況のアップデート（一般 or ホストでメッセージを変更）
+  // 混雑状況のアップデート
+  // ホスト: 自分の店舗のspots.congestionを直接更新（公式情報）
+  // 一般ユーザー: congestion_reportsに新しい報告として追加（自分の報告として後で削除可能）
   const handleReport = async (spotId, status) => {
-    const nowIso = new Date().toISOString();
-    const { error } = await supabase
-      .from('spots')
-      .update({ congestion: status, updated_at: nowIso })
-      .eq('id', spotId);
-
-    if (error) {
-      alert(`更新に失敗しました: ${error.message}`);
-      return;
-    }
-
-    setSelectedSpot((prev) =>
-      prev && prev.id === spotId ? { ...prev, congestion: status, updatedAt: nowIso } : prev
-    );
+    if (!currentUser) return;
 
     if (loginRole === 'host') {
+      const nowIso = new Date().toISOString();
+      const { error } = await supabase
+        .from('spots')
+        .update({ congestion: status, updated_at: nowIso })
+        .eq('id', spotId)
+        .eq('host_id', currentUser.id);
+
+      if (error) {
+        alert(`更新に失敗しました: ${error.message}`);
+        return;
+      }
+
+      setSelectedSpot((prev) =>
+        prev && prev.id === spotId
+          ? { ...prev, congestion: status, updatedAt: nowIso, latestReportId: null, latestReportUserId: null }
+          : prev
+      );
       alert(`管理店舗の混雑状況を「${status}」に公式更新しました！`);
     } else {
+      const { data, error } = await supabase
+        .from('congestion_reports')
+        .insert({ spot_id: spotId, user_id: currentUser.id, status })
+        .select()
+        .single();
+
+      if (error) {
+        alert(`報告に失敗しました: ${error.message}`);
+        return;
+      }
+
+      setSelectedSpot((prev) =>
+        prev && prev.id === spotId
+          ? {
+              ...prev,
+              congestion: status,
+              updatedAt: data.created_at,
+              latestReportId: data.id,
+              latestReportUserId: currentUser.id,
+            }
+          : prev
+      );
       alert(`「${status}」の混雑情報を報告しました！`);
     }
     // ※ 他のユーザーの画面へはリアルタイム購読を通じて自動反映されます
+  };
+
+  // 自分の混雑報告を取り消す
+  const handleDeleteReport = async (reportId) => {
+    if (!currentUser || !reportId) return;
+    const { error } = await supabase
+      .from('congestion_reports')
+      .delete()
+      .eq('id', reportId)
+      .eq('user_id', currentUser.id);
+
+    if (error) {
+      alert(`取り消しに失敗しました: ${error.message}`);
+    }
+    // ※ 最新の状態はリアルタイム購読経由で再取得されます
   };
 
   // 口コミの追加（ログイン中の一般ユーザー限定）
@@ -560,6 +692,21 @@ export default function App() {
 
     setNewComment("");
     // ※ 一覧への反映はリアルタイム購読経由で行われます
+  };
+
+  // 自分の口コミを削除する
+  const handleDeleteComment = async (commentId) => {
+    if (!currentUser) return;
+    const { error } = await supabase
+      .from('comments')
+      .delete()
+      .eq('id', commentId)
+      .eq('user_id', currentUser.id);
+
+    if (error) {
+      alert(`削除に失敗しました: ${error.message}`);
+    }
+    // ※ 最新の状態はリアルタイム購読経由で再取得されます
   };
 
   // 新規スポットの追加（ホスト限定）
@@ -603,6 +750,70 @@ export default function App() {
     alert(`新店舗「${data.name}」をマップに登録しました！`);
   };
 
+  // 編集フォームを開く（ホストが自分のスポットの詳細パネルから呼び出す）
+  const openEditSpot = (spot) => {
+    setEditSpotForm({
+      id: spot.id,
+      name: spot.name,
+      wifiSpeed: spot.wifiSpeed,
+      hasPower: spot.hasPower,
+    });
+  };
+
+  // スポット情報の更新（ホストが自分の店舗のみ）
+  const handleUpdateSpot = async (e) => {
+    e.preventDefault();
+    if (!editSpotForm.name.trim()) {
+      alert("店舗名を入力してください");
+      return;
+    }
+    if (!currentUser) return;
+
+    const { data, error } = await supabase
+      .from('spots')
+      .update({
+        name: editSpotForm.name,
+        wifi_speed: editSpotForm.wifiSpeed,
+        has_power: editSpotForm.hasPower,
+      })
+      .eq('id', editSpotForm.id)
+      .eq('host_id', currentUser.id)
+      .select()
+      .single();
+
+    if (error) {
+      alert(`更新に失敗しました: ${error.message}`);
+      return;
+    }
+
+    setEditSpotForm(null);
+    setSelectedSpot((prev) =>
+      prev && prev.id === data.id
+        ? { ...prev, name: data.name, wifiSpeed: data.wifi_speed, hasPower: data.has_power }
+        : prev
+    );
+    alert("店舗情報を更新しました！");
+  };
+
+  // スポットの削除（ホストが自分の店舗のみ）
+  const handleDeleteSpot = async (spotId) => {
+    if (!currentUser) return;
+    if (!window.confirm('この店舗を削除します。この操作は取り消せません。よろしいですか？')) return;
+
+    const { error } = await supabase
+      .from('spots')
+      .delete()
+      .eq('id', spotId)
+      .eq('host_id', currentUser.id);
+
+    if (error) {
+      alert(`削除に失敗しました: ${error.message}`);
+      return;
+    }
+
+    setSelectedSpot(null);
+  };
+
   // ==========================================
   // 1. トップページ（Index）
   // ==========================================
@@ -636,6 +847,25 @@ export default function App() {
         authError={authError}
         authLoading={authLoading}
         onBack={() => setCurrentScreen('index')}
+        resetEmail={resetEmail}
+        setResetEmail={setResetEmail}
+        resetEmailSent={resetEmailSent}
+        handleForgotPassword={handleForgotPassword}
+      />
+    );
+  }
+
+  // ==========================================
+  // 2.5 パスワード再設定画面（メール内リンクから遷移してくる）
+  // ==========================================
+  if (currentScreen === 'resetPassword') {
+    return (
+      <ResetPasswordScreen
+        newPassword={newPassword}
+        setNewPassword={setNewPassword}
+        handleUpdatePassword={handleUpdatePassword}
+        authError={authError}
+        authLoading={authLoading}
       />
     );
   }
@@ -648,6 +878,7 @@ export default function App() {
       loginRole={loginRole}
       username={username}
       isLoggedIn={Boolean(currentUser)}
+      currentUserId={currentUser?.id || null}
       handleLogout={handleLogout}
       handleGeoLocation={handleGeoLocation}
       mapContainerRef={mapContainerRef}
@@ -658,7 +889,9 @@ export default function App() {
       tempMarker={tempMarker}
       handleCreateSpot={handleCreateSpot}
       handleReport={handleReport}
+      handleDeleteReport={handleDeleteReport}
       handleAddComment={handleAddComment}
+      handleDeleteComment={handleDeleteComment}
       newComment={newComment}
       setNewComment={setNewComment}
       filters={filters}
@@ -667,6 +900,11 @@ export default function App() {
       favoriteIds={favoriteIds}
       toggleFavorite={toggleFavorite}
       onLoginPrompt={handleLoginPromptFromMap}
+      editSpotForm={editSpotForm}
+      setEditSpotForm={setEditSpotForm}
+      openEditSpot={openEditSpot}
+      handleUpdateSpot={handleUpdateSpot}
+      handleDeleteSpot={handleDeleteSpot}
     />
   );
 }
