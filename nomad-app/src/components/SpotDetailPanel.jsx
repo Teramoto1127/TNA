@@ -1,11 +1,62 @@
 import React from 'react';
 
-export default function SpotDetailPanel({ selectedSpot, loginRole, newComment, setNewComment, handleReport, handleAddComment, setSelectedSpot, isFavorite, onToggleFavorite, canInteract }) {
+function formatDateTime(isoString) {
+  if (!isoString) return '';
+  try {
+    return new Date(isoString).toLocaleString('ja-JP', {
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return isoString;
+  }
+}
+
+export default function SpotDetailPanel({
+  selectedSpot,
+  loginRole,
+  currentUserId,
+  newComment,
+  setNewComment,
+  handleReport,
+  handleDeleteReport,
+  handleAddComment,
+  handleDeleteComment,
+  setSelectedSpot,
+  isFavorite,
+  onToggleFavorite,
+  canInteract,
+  onEditSpot,
+  onDeleteSpot,
+}) {
+  const isOwnSpot = loginRole === 'host' && currentUserId && selectedSpot.hostId === currentUserId;
+  const isOwnReport = currentUserId && selectedSpot.latestReportUserId === currentUserId;
+
   return (
     <div className="absolute bottom-0 left-0 right-0 z-10 bg-white rounded-t-2xl shadow-2xl p-6 transition-all transform duration-300 max-w-md mx-auto border border-gray-100 max-h-[60vh] overflow-y-auto">
       <div className="flex justify-between items-start mb-2">
         <h2 className="text-xl font-bold text-gray-900">{selectedSpot.name}</h2>
         <div className="flex items-center gap-1">
+          {isOwnSpot && (
+            <>
+              <button
+                onClick={() => onEditSpot(selectedSpot)}
+                title="この店舗を編集"
+                className="text-gray-400 hover:text-indigo-600 text-sm font-bold p-1"
+              >
+                ✏️
+              </button>
+              <button
+                onClick={() => onDeleteSpot(selectedSpot.id)}
+                title="この店舗を削除"
+                className="text-gray-400 hover:text-rose-600 text-sm font-bold p-1"
+              >
+                🗑️
+              </button>
+            </>
+          )}
           <button
             onClick={() => onToggleFavorite(selectedSpot.id)}
             title={isFavorite ? 'お気に入りから外す' : 'お気に入りに追加'}
@@ -45,7 +96,17 @@ export default function SpotDetailPanel({ selectedSpot, loginRole, newComment, s
             {selectedSpot.congestion}
           </span>
         </div>
-        <span className="text-xs text-gray-400">最終更新: {selectedSpot.updatedAt}</span>
+        <span className="text-xs text-gray-400 text-right">
+          最終更新: {formatDateTime(selectedSpot.updatedAt)}
+          {isOwnReport && (
+            <button
+              onClick={() => handleDeleteReport(selectedSpot.latestReportId)}
+              className="block ml-auto mt-1 text-rose-500 hover:text-rose-700 font-bold underline"
+            >
+              自分の報告を取り消す
+            </button>
+          )}
+        </span>
       </div>
 
       <p className="text-xs font-bold text-gray-700 mb-2">
@@ -104,9 +165,22 @@ export default function SpotDetailPanel({ selectedSpot, loginRole, newComment, s
 
         <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
           {selectedSpot.comments && selectedSpot.comments.length > 0 ? (
-            selectedSpot.comments.map((comment, index) => (
-              <div key={index} className="bg-gray-50 p-2.5 rounded-lg text-xs leading-relaxed text-gray-700 border border-gray-100">
-                {comment}
+            selectedSpot.comments.map((comment) => (
+              <div key={comment.id} className="bg-gray-50 p-2.5 rounded-lg text-xs leading-relaxed text-gray-700 border border-gray-100">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="font-bold text-gray-500 text-[10px]">
+                    {comment.username} ・ {formatDateTime(comment.createdAt)}
+                  </span>
+                  {currentUserId && comment.userId === currentUserId && (
+                    <button
+                      onClick={() => handleDeleteComment(comment.id)}
+                      className="text-gray-400 hover:text-rose-600 text-[10px] font-bold"
+                    >
+                      削除
+                    </button>
+                  )}
+                </div>
+                {comment.content}
               </div>
             ))
           ) : (
