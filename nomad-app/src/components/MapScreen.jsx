@@ -37,6 +37,8 @@ export default function MapScreen({
   handleDeleteSpot,
   onManualAddSpot,   // ← この行を追加
 }) {
+  console.log('現在のloginRoleの値:', JSON.stringify(loginRole)); // ← 一時的に追加
+  
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const activeFilterCount =
     (filters.hasPowerOnly ? 1 : 0) +
