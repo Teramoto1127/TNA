@@ -582,6 +582,14 @@ export default function App() {
     });
   }, [filteredSpots, currentScreen]);
 
+    // ↓↓↓ ここに追加 ↓↓↓
+  useEffect(() => {
+    if (!newSpotForm || !tempMarkerRef.current) return;
+    if (Number.isNaN(newSpotForm.lat) || Number.isNaN(newSpotForm.lng)) return;
+    tempMarkerRef.current.setLngLat([newSpotForm.lng, newSpotForm.lat]);
+  }, [newSpotForm?.lat, newSpotForm?.lng]);
+  // ↑↑↑ ここまで追加 ↑↑↑
+
   // 現在地ジャンプ（一般ユーザー専用）
   const handleGeoLocation = () => {
     if (!navigator.geolocation) {
@@ -759,6 +767,34 @@ export default function App() {
       hasPower: spot.hasPower,
     });
   };
+    // ↓↓↓ ここに openManualAddSpot を追加 ↓↓↓
+  const openManualAddSpot = () => {
+    if (loginRole !== 'host') return;
+    const defaultLat = 35.681236;
+    const defaultLng = 139.767125;
+    if (tempMarkerRef.current) tempMarkerRef.current.remove();
+    const el = document.createElement('div');
+    el.className = 'w-8 h-8 rounded-full bg-indigo-600 border-2 border-white shadow-xl flex items-center justify-center text-white font-bold text-lg animate-pulse cursor-pointer';
+    el.innerText = '＋';
+    const marker = mapRef.current
+      ? new maplibregl.Marker({ element: el }).setLngLat([defaultLng, defaultLat]).addTo(mapRef.current)
+      : null;
+    setTempMarker(marker);
+    setSelectedSpot(null);
+    setEditSpotForm(null);
+    setNewSpotForm({
+      lat: defaultLat,
+      lng: defaultLng,
+      name: "",
+      hasPower: true,
+      congestion: "空席あり",
+      wifiSpeed: "100Mbps",
+    });
+    if (mapRef.current) {
+      mapRef.current.easeTo({ center: [defaultLng, defaultLat], zoom: 15 });
+    }
+  };
+  // ↑↑↑ ここまで追加 ↑↑↑
 
   // スポット情報の更新（ホストが自分の店舗のみ）
   const handleUpdateSpot = async (e) => {
@@ -905,6 +941,7 @@ export default function App() {
       openEditSpot={openEditSpot}
       handleUpdateSpot={handleUpdateSpot}
       handleDeleteSpot={handleDeleteSpot}
+      onManualAddSpot={openManualAddSpot}   
     />
   );
 }
