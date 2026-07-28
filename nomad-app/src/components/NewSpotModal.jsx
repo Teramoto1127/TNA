@@ -1,9 +1,13 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 
 export default function NewSpotModal({ newSpotForm, setNewSpotForm, handleCreateSpot, tempMarker }) {
-  return (
-    // 画面全体を覆う半透明の背景。これで地図の上に確実に浮かび上がって見える
-    <div className="fixed inset-0 z-30 bg-black/40 flex items-center justify-center p-4">
+  const modalContent = (
+    // 画面全体を覆う半透明の背景
+    <div
+      className="fixed inset-0 bg-black/40 flex items-center justify-center p-4"
+      style={{ zIndex: 9999 }}
+    >
       <div className="modal bg-white rounded-2xl shadow-2xl p-6 border border-gray-150 w-full max-w-md max-h-[85vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-base font-bold text-gray-900 flex items-center gap-1">➕ 新店舗を公式登録</h3>
@@ -81,4 +85,8 @@ export default function NewSpotModal({ newSpotForm, setNewSpotForm, handleCreate
       </div>
     </div>
   );
+
+  // document.body 直下に描画することで、親要素のoverflow-hiddenや
+  // スタッキングコンテキストの影響を一切受けずに、必ず最前面に表示させる
+  return createPortal(modalContent, document.body);
 }
