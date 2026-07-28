@@ -35,10 +35,10 @@ export default function MapScreen({
   openEditSpot,
   handleUpdateSpot,
   handleDeleteSpot,
-  onManualAddSpot,   // ← この行を追加
+  onManualAddSpot,
 }) {
-  console.log('現在のloginRoleの値:', JSON.stringify(loginRole)); // ← 一時的に追加
-  
+  console.log('MapScreenがレンダリングされました。loginRole:', loginRole, 'onManualAddSpotの型:', typeof onManualAddSpot);
+
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const activeFilterCount =
     (filters.hasPowerOnly ? 1 : 0) +
@@ -77,16 +77,18 @@ export default function MapScreen({
             </button>
           )}
 
-               {/* ↓↓↓ ここに追加 ↓↓↓ */}
           {loginRole === 'host' && (
             <button
-              onClick={onManualAddSpot}
+              onClick={() => {
+                console.log('手動で追加ボタンがクリックされました');
+                onManualAddSpot();
+              }}
               className="bg-white border border-gray-200 hover:border-gray-300 text-gray-700 text-xs font-bold px-3 py-1.5 rounded-full transition-all shadow-sm"
             >
               📝 手動で追加
             </button>
           )}
-          {/* ↑↑↑ ここまで ↑↑↑ */}
+
           <button
             onClick={() => setShowFilterPanel((prev) => !prev)}
             className="relative bg-white border border-gray-200 hover:border-gray-300 text-gray-700 text-xs font-bold px-3 py-1.5 rounded-full transition-all shadow-sm"
@@ -138,12 +140,15 @@ export default function MapScreen({
       )}
 
       {newSpotForm && loginRole === 'host' && (
-        <NewSpotModal
-          newSpotForm={newSpotForm}
-          setNewSpotForm={setNewSpotForm}
-          handleCreateSpot={handleCreateSpot}
-          tempMarker={tempMarker}
-        />
+        <>
+          {console.log('NewSpotModalをレンダーしようとしています。newSpotForm:', newSpotForm)}
+          <NewSpotModal
+            newSpotForm={newSpotForm}
+            setNewSpotForm={setNewSpotForm}
+            handleCreateSpot={handleCreateSpot}
+            tempMarker={tempMarker}
+          />
+        </>
       )}
 
       {editSpotForm && loginRole === 'host' && (
