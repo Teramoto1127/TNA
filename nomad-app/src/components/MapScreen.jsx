@@ -37,8 +37,6 @@ export default function MapScreen({
   handleDeleteSpot,
   onManualAddSpot,
 }) {
-  console.log('MapScreenがレンダリングされました。loginRole:', loginRole, 'onManualAddSpotの型:', typeof onManualAddSpot);
-
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const activeFilterCount =
     (filters.hasPowerOnly ? 1 : 0) +
