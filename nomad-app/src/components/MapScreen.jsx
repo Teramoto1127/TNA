@@ -77,7 +77,10 @@ export default function MapScreen({
 
           {loginRole === 'host' && (
             <button
-              onClick={onManualAddSpot}
+              onClick={() => {
+                console.log('手動で追加ボタンがクリックされました');
+                onManualAddSpot();
+              }}
               className="bg-white border border-gray-200 hover:border-gray-300 text-gray-700 text-xs font-bold px-3 py-1.5 rounded-full transition-all shadow-sm"
             >
               📝 手動で追加
@@ -135,12 +138,15 @@ export default function MapScreen({
       )}
 
       {newSpotForm && loginRole === 'host' && (
-        <NewSpotModal
-          newSpotForm={newSpotForm}
-          setNewSpotForm={setNewSpotForm}
-          handleCreateSpot={handleCreateSpot}
-          tempMarker={tempMarker}
-        />
+        <>
+          {console.log('NewSpotModalをレンダーしようとしています。newSpotForm:', newSpotForm)}
+          <NewSpotModal
+            newSpotForm={newSpotForm}
+            setNewSpotForm={setNewSpotForm}
+            handleCreateSpot={handleCreateSpot}
+            tempMarker={tempMarker}
+          />
+        </>
       )}
 
       {editSpotForm && loginRole === 'host' && (
