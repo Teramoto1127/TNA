@@ -34,24 +34,48 @@ export default function SpotDetailPanel({
   const isOwnSpot = loginRole === 'host' && currentUserId && selectedSpot.hostId === currentUserId;
   const isOwnReport = currentUserId && selectedSpot.latestReportUserId === currentUserId;
 
+  const congestionColor =
+    selectedSpot.congestion === '空席あり' ? '#10B981' :
+    selectedSpot.congestion === 'やや混雑' ? '#F59E0B' : '#EF4444';
+
   return (
-    <div className="absolute bottom-0 left-0 right-0 z-10 bg-white rounded-t-2xl shadow-2xl p-6 transition-all transform duration-300 max-w-md mx-auto border border-gray-100 max-h-[60vh] overflow-y-auto">
-      <div className="flex justify-between items-start mb-2">
-        <h2 className="text-xl font-bold text-gray-900">{selectedSpot.name}</h2>
-        <div className="flex items-center gap-1">
+    <div
+      style={{
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 20,
+        backgroundColor: 'white',
+        borderTopLeftRadius: '20px',
+        borderTopRightRadius: '20px',
+        boxShadow: '0 -10px 40px rgba(0,0,0,0.2)',
+        padding: '24px',
+        maxWidth: '480px',
+        margin: '0 auto',
+        border: '1px solid #f3f4f6',
+        maxHeight: '60vh',
+        overflowY: 'auto',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+        <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: '#111827', margin: 0 }}>
+          {selectedSpot.name}
+        </h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           {isOwnSpot && (
             <>
               <button
                 onClick={() => onEditSpot(selectedSpot)}
                 title="この店舗を編集"
-                className="text-gray-400 hover:text-indigo-600 text-sm font-bold p-1"
+                style={{ color: '#9CA3AF', fontSize: '14px', fontWeight: 'bold', padding: '4px', background: 'none', border: 'none', cursor: 'pointer' }}
               >
                 ✏️
               </button>
               <button
                 onClick={() => onDeleteSpot(selectedSpot.id)}
                 title="この店舗を削除"
-                className="text-gray-400 hover:text-rose-600 text-sm font-bold p-1"
+                style={{ color: '#9CA3AF', fontSize: '14px', fontWeight: 'bold', padding: '4px', background: 'none', border: 'none', cursor: 'pointer' }}
               >
                 🗑️
               </button>
@@ -60,121 +84,149 @@ export default function SpotDetailPanel({
           <button
             onClick={() => onToggleFavorite(selectedSpot.id)}
             title={isFavorite ? 'お気に入りから外す' : 'お気に入りに追加'}
-            className={`text-lg font-bold p-1 transition-all ${
-              isFavorite ? 'text-amber-400 hover:text-amber-500' : 'text-gray-300 hover:text-amber-400'
-            }`}
+            style={{
+              fontSize: '18px',
+              fontWeight: 'bold',
+              padding: '4px',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: isFavorite ? '#FBBF24' : '#D1D5DB',
+            }}
           >
             {isFavorite ? '★' : '☆'}
           </button>
           <button
             onClick={() => setSelectedSpot(null)}
-            className="text-gray-400 hover:text-gray-600 text-lg font-bold p-1"
+            style={{ color: '#9CA3AF', fontSize: '18px', fontWeight: 'bold', padding: '4px', background: 'none', border: 'none', cursor: 'pointer' }}
           >
             ✕
           </button>
         </div>
       </div>
 
-      <div className="flex gap-2 mb-4">
-        <span className="bg-blue-50 text-blue-700 text-xs px-2.5 py-1 rounded-md font-medium flex items-center gap-1">
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+        <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', fontSize: '12px', padding: '4px 10px', borderRadius: '6px', fontWeight: '500' }}>
           📶 Wi-Fi: {selectedSpot.wifiSpeed}
         </span>
-        <span className="bg-orange-50 text-orange-700 text-xs px-2.5 py-1 rounded-md font-medium flex items-center gap-1">
+        <span style={{ backgroundColor: '#FFF7ED', color: '#C2410C', fontSize: '12px', padding: '4px 10px', borderRadius: '6px', fontWeight: '500' }}>
           ⚡ {selectedSpot.hasPower ? '電源あり' : '電源なし'}
         </span>
       </div>
 
-      <hr className="border-gray-100 my-3" />
+      <hr style={{ border: 'none', borderTop: '1px solid #f3f4f6', margin: '12px 0' }} />
 
-      <div className="flex items-center justify-between mb-4">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
         <div>
-          <p className="text-xs text-gray-500">現在の混雑状況</p>
-          <span className={`inline-block mt-1 text-sm font-extrabold px-3 py-1 rounded-full text-white ${
-            selectedSpot.congestion === '空席あり' ? 'bg-emerald-500' :
-            selectedSpot.congestion === 'やや混雑' ? 'bg-amber-500' : 'bg-rose-500'
-          }`}>
+          <p style={{ fontSize: '12px', color: '#6B7280', margin: 0 }}>現在の混雑状況</p>
+          <span
+            style={{
+              display: 'inline-block',
+              marginTop: '4px',
+              fontSize: '14px',
+              fontWeight: '800',
+              padding: '4px 12px',
+              borderRadius: '999px',
+              color: 'white',
+              backgroundColor: congestionColor,
+            }}
+          >
             {selectedSpot.congestion}
           </span>
         </div>
-        <span className="text-xs text-gray-400 text-right">
+        <div style={{ fontSize: '12px', color: '#9CA3AF', textAlign: 'right' }}>
           最終更新: {formatDateTime(selectedSpot.updatedAt)}
           {isOwnReport && (
             <button
               onClick={() => handleDeleteReport(selectedSpot.latestReportId)}
-              className="block ml-auto mt-1 text-rose-500 hover:text-rose-700 font-bold underline"
+              style={{ display: 'block', marginLeft: 'auto', marginTop: '4px', color: '#F43F5E', fontWeight: 'bold', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px' }}
             >
               自分の報告を取り消す
             </button>
           )}
-        </span>
+        </div>
       </div>
 
-      <p className="text-xs font-bold text-gray-700 mb-2">
+      <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#374151', marginBottom: '8px' }}>
         {loginRole === 'host' ? '📢 【公式権限】店舗のリアルタイム混雑度を更新' : '📢 今ココにいる？状況を教えてポイントGET！'}
       </p>
+
       {canInteract ? (
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          {['空席あり', 'やや混雑', '満席'].map((status) => (
-            <button
-              key={status}
-              onClick={() => handleReport(selectedSpot.id, status)}
-              className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all shadow-sm ${
-                status === '空席あり' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 active:bg-emerald-100' :
-                status === 'やや混雑' ? 'bg-amber-50 text-amber-700 border border-amber-200 active:bg-amber-100' :
-                'bg-rose-50 text-rose-700 border border-rose-200 active:bg-rose-100'
-              }`}
-            >
-              {status === '空席あり' ? '🟢 余裕' : status === 'やや混雑' ? '🟡 やや混' : '🔴 満席'}
-            </button>
-          ))}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '16px' }}>
+          {['空席あり', 'やや混雑', '満席'].map((status) => {
+            const colors =
+              status === '空席あり'
+                ? { bg: '#ECFDF5', text: '#047857', border: '#A7F3D0' }
+                : status === 'やや混雑'
+                ? { bg: '#FFFBEB', text: '#B45309', border: '#FDE68A' }
+                : { bg: '#FFF1F2', text: '#BE123C', border: '#FECDD3' };
+            return (
+              <button
+                key={status}
+                onClick={() => handleReport(selectedSpot.id, status)}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  backgroundColor: colors.bg,
+                  color: colors.text,
+                  border: `1px solid ${colors.border}`,
+                  cursor: 'pointer',
+                }}
+              >
+                {status === '空席あり' ? '🟢 余裕' : status === 'やや混雑' ? '🟡 やや混' : '🔴 満席'}
+              </button>
+            );
+          })}
         </div>
       ) : (
-        <p className="text-[10px] text-gray-400 mb-4 bg-gray-50 p-2 rounded-lg">
+        <p style={{ fontSize: '10px', color: '#9CA3AF', marginBottom: '16px', backgroundColor: '#F9FAFB', padding: '8px', borderRadius: '8px' }}>
           ※ログインすると混雑状況を報告できます。
         </p>
       )}
 
-      <div className="border-t border-gray-100 pt-3">
-        <h4 className="text-xs font-bold text-gray-900 mb-2">💬 みんなの口コミ</h4>
+      <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '12px' }}>
+        <h4 style={{ fontSize: '12px', fontWeight: 'bold', color: '#111827', marginBottom: '8px' }}>💬 みんなの口コミ</h4>
 
         {loginRole === 'user' && canInteract ? (
-          <form onSubmit={handleAddComment} className="flex gap-2 mb-3">
+          <form onSubmit={handleAddComment} style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
             <input
               type="text"
               placeholder="「静かで快適」「Wi-Fiサクサク」など..."
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
-              className="flex-1 p-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={{ flex: 1, padding: '8px', border: '1px solid #D1D5DB', borderRadius: '8px', fontSize: '12px', boxSizing: 'border-box' }}
             />
             <button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition-all"
+              style={{ backgroundColor: '#2563EB', color: 'white', fontWeight: 'bold', padding: '8px 16px', borderRadius: '8px', fontSize: '12px', border: 'none', cursor: 'pointer' }}
             >
               投稿
             </button>
           </form>
         ) : loginRole === 'host' ? (
-          <p className="text-[10px] text-indigo-600 font-semibold mb-3 bg-indigo-50 p-2 rounded-lg">
+          <p style={{ fontSize: '10px', color: '#4F46E5', fontWeight: '600', marginBottom: '12px', backgroundColor: '#EEF2FF', padding: '8px', borderRadius: '8px' }}>
             ※一般ユーザーからの生の声が表示されています（ホストは閲覧のみ可能）
           </p>
         ) : (
-          <p className="text-[10px] text-gray-400 mb-3">
+          <p style={{ fontSize: '10px', color: '#9CA3AF', marginBottom: '12px' }}>
             ※ログインすると、このスポットの口コミを投稿できるようになります。
           </p>
         )}
 
-        <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '128px', overflowY: 'auto', paddingRight: '4px' }}>
           {selectedSpot.comments && selectedSpot.comments.length > 0 ? (
             selectedSpot.comments.map((comment) => (
-              <div key={comment.id} className="bg-gray-50 p-2.5 rounded-lg text-xs leading-relaxed text-gray-700 border border-gray-100">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="font-bold text-gray-500 text-[10px]">
+              <div key={comment.id} style={{ backgroundColor: '#F9FAFB', padding: '10px', borderRadius: '8px', fontSize: '12px', lineHeight: '1.6', color: '#374151', border: '1px solid #F3F4F6' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <span style={{ fontWeight: 'bold', color: '#6B7280', fontSize: '10px' }}>
                     {comment.username} ・ {formatDateTime(comment.createdAt)}
                   </span>
                   {currentUserId && comment.userId === currentUserId && (
                     <button
                       onClick={() => handleDeleteComment(comment.id)}
-                      className="text-gray-400 hover:text-rose-600 text-[10px] font-bold"
+                      style={{ color: '#9CA3AF', fontSize: '10px', fontWeight: 'bold', background: 'none', border: 'none', cursor: 'pointer' }}
                     >
                       削除
                     </button>
@@ -184,7 +236,9 @@ export default function SpotDetailPanel({
               </div>
             ))
           ) : (
-            <p className="text-[10px] text-gray-400 text-center py-2">口コミはまだありません。</p>
+            <p style={{ fontSize: '10px', color: '#9CA3AF', textAlign: 'center', padding: '8px 0' }}>
+              口コミはまだありません。
+            </p>
           )}
         </div>
       </div>

@@ -641,7 +641,6 @@ export default function App() {
 
   const handleCreateSpot = async (e) => {
     e.preventDefault();
-    console.log('handleCreateSpot が呼ばれました。newSpotForm:', newSpotForm, 'currentUser:', currentUser);
 
     if (!newSpotForm.name.trim()) {
       alert("店舗名を入力してください");
@@ -691,13 +690,9 @@ export default function App() {
     });
   };
 
+  // 手動登録ボタンから新規スポット登録フォームを開く
   const openManualAddSpot = () => {
-    console.log('openManualAddSpot が呼ばれました。現在のloginRole:', loginRole);
-
-    if (loginRole !== 'host') {
-      console.log('ホストではないため処理を中断しました');
-      return;
-    }
+    if (loginRole !== 'host') return;
 
     const defaultLat = 35.681236;
     const defaultLng = 139.767125;
@@ -723,8 +718,6 @@ export default function App() {
       congestion: "空席あり",
       wifiSpeed: "100Mbps",
     });
-
-    console.log('newSpotFormをセットしました。これでフォームが開くはずです');
 
     if (mapRef.current) {
       mapRef.current.easeTo({ center: [defaultLng, defaultLat], zoom: 15 });
