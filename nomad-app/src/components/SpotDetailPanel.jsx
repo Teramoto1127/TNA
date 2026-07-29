@@ -34,6 +34,10 @@ export default function SpotDetailPanel({
   const isOwnSpot = loginRole === 'host' && currentUserId && selectedSpot.hostId === currentUserId;
   const isOwnReport = currentUserId && selectedSpot.latestReportUserId === currentUserId;
 
+  // ホストの場合は「自分の店舗」の時だけ混雑状況を更新できる。
+  // 一般ユーザーは今まで通り、ログインしていれば誰でも報告できる。
+  const canReportCongestion = loginRole === 'host' ? isOwnSpot : canInteract;
+
   const congestionColor =
     selectedSpot.congestion === '空席あり' ? '#10B981' :
     selectedSpot.congestion === 'やや混雑' ? '#F59E0B' : '#EF4444';
@@ -148,10 +152,12 @@ export default function SpotDetailPanel({
       </div>
 
       <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#374151', marginBottom: '8px' }}>
-        {loginRole === 'host' ? '📢 【公式権限】店舗のリアルタイム混雑度を更新' : '📢 今ココにいる？状況を教えてポイントGET！'}
+        {loginRole === 'host'
+          ? (isOwnSpot ? '📢 【公式権限】店舗のリアルタイム混雑度を更新' : '📢 今ココにいる？状況を教えてポイントGET！')
+          : '📢 今ココにいる？状況を教えてポイントGET！'}
       </p>
 
-      {canInteract ? (
+      {canReportCongestion ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '16px' }}>
           {['空席あり', 'やや混雑', '満席'].map((status) => {
             const colors =
@@ -182,7 +188,9 @@ export default function SpotDetailPanel({
         </div>
       ) : (
         <p style={{ fontSize: '10px', color: '#9CA3AF', marginBottom: '16px', backgroundColor: '#F9FAFB', padding: '8px', borderRadius: '8px' }}>
-          ※ログインすると混雑状況を報告できます。
+          {loginRole === 'host'
+            ? '※この店舗はご自身が登録した店舗ではないため、混雑状況を更新できません。'
+            : '※ログインすると混雑状況を報告できます。'}
         </p>
       )}
 

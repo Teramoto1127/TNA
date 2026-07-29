@@ -546,19 +546,36 @@ export default function App() {
     );
   };
 
+  // 混雑状況のアップデート
+  // ホスト: 自分の店舗のspots.congestionのみ直接更新可能（他店舗は更新不可）
+  // 一般ユーザー: congestion_reportsに新しい報告として追加（自分の報告として後で削除可能）
   const handleReport = async (spotId, status) => {
     if (!currentUser) return;
 
     if (loginRole === 'host') {
+      // 事前に「自分の店舗かどうか」をチェックし、他店舗への更新を未然に防ぐ
+      const targetSpot = spots.find((s) => s.id === spotId);
+      if (!targetSpot || targetSpot.hostId !== currentUser.id) {
+        alert('自分が登録した店舗の混雑状況のみ更新できます。');
+        return;
+      }
+
       const nowIso = new Date().toISOString();
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('spots')
         .update({ congestion: status, updated_at: nowIso })
         .eq('id', spotId)
-        .eq('host_id', currentUser.id);
+        .eq('host_id', currentUser.id)
+        .select();
 
       if (error) {
         alert(`更新に失敗しました: ${error.message}`);
+        return;
+      }
+
+      // 0件しか更新されなかった場合（他店舗だった場合）は成功扱いにしない
+      if (!data || data.length === 0) {
+        alert('更新できませんでした。この店舗はあなたが登録した店舗ではありません。');
         return;
       }
 
@@ -593,6 +610,7 @@ export default function App() {
       );
       alert(`「${status}」の混雑情報を報告しました！`);
     }
+    // ※ 他のユーザーの画面へはリアルタイム購読を通じて自動反映されます
   };
 
   const handleDeleteReport = async (reportId) => {
