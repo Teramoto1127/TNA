@@ -66,21 +66,16 @@ export default function MapScreen({
         </div>
 
         <div className="flex items-center gap-2">
-          {loginRole === 'user' && (
-            <button
-              onClick={handleGeoLocation}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-full transition-all shadow-sm"
-            >
-              🎯 現在地
-            </button>
-          )}
+          <button
+            onClick={handleGeoLocation}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-full transition-all shadow-sm"
+          >
+            🎯 現在地
+          </button>
 
           {loginRole === 'host' && (
             <button
-              onClick={() => {
-                console.log('手動で追加ボタンがクリックされました');
-                onManualAddSpot();
-              }}
+              onClick={onManualAddSpot}
               className="bg-white border border-gray-200 hover:border-gray-300 text-gray-700 text-xs font-bold px-3 py-1.5 rounded-full transition-all shadow-sm"
             >
               📝 手動で追加
