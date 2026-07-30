@@ -10,10 +10,17 @@ import ResetPasswordScreen from './components/ResetPasswordScreen.jsx';
 import MapScreen from './components/MapScreen.jsx';
 import { supabase } from './lib/supabaseClient.js';
 
-function transformSpot(spotRow, commentsForSpot = [], latestReport = null) {
+function transformSpot(spotRow, commentsForSpot = [], latestReport = null, wifiReportsForSpot = []) {
   const baselineTime = spotRow.updated_at ? new Date(spotRow.updated_at).getTime() : 0;
   const reportTime = latestReport ? new Date(latestReport.created_at).getTime() : -1;
   const useReport = reportTime > baselineTime;
+
+  // Wi-Fi実測値: みんなの報告の平均値と件数を計算（直近20件まで）
+  const recentWifiReports = wifiReportsForSpot.slice(0, 20);
+  const crowdWifiCount = recentWifiReports.length;
+  const crowdWifiSpeed = crowdWifiCount > 0
+    ? Math.round(recentWifiReports.reduce((sum, r) => sum + Number(r.speed_mbps), 0) / crowdWifiCount)
+    : null;
 
   return {
     id: spotRow.id,
@@ -27,6 +34,8 @@ function transformSpot(spotRow, commentsForSpot = [], latestReport = null) {
     hostId: spotRow.host_id,
     latestReportId: useReport ? latestReport.id : null,
     latestReportUserId: useReport ? latestReport.user_id : null,
+    crowdWifiSpeed,
+    crowdWifiCount,
     comments: commentsForSpot.map((c) => ({
       id: c.id,
       content: c.content,
@@ -128,10 +137,12 @@ export default function App() {
       { data: spotsData, error: spotsError },
       { data: commentsData, error: commentsError },
       { data: reportsData, error: reportsError },
+      { data: wifiReportsData, error: wifiReportsError },
     ] = await Promise.all([
       supabase.from('spots').select('*').order('created_at', { ascending: false }),
       supabase.from('comments').select('*, profiles(username)').order('created_at', { ascending: false }),
       supabase.from('congestion_reports').select('*').order('created_at', { ascending: false }),
+      supabase.from('wifi_reports').select('*').order('created_at', { ascending: false }),
     ]);
 
     if (spotsError) {
@@ -143,6 +154,9 @@ export default function App() {
     }
     if (reportsError) {
       console.error('混雑報告取得エラー:', reportsError);
+    }
+    if (wifiReportsError) {
+      console.error('Wi-Fi実測取得エラー:', wifiReportsError);
     }
 
     const commentsBySpot = {};
@@ -156,9 +170,20 @@ export default function App() {
       if (!latestReportBySpot[r.spot_id]) latestReportBySpot[r.spot_id] = r;
     });
 
+    const wifiReportsBySpot = {};
+    (wifiReportsData || []).forEach((w) => {
+      if (!wifiReportsBySpot[w.spot_id]) wifiReportsBySpot[w.spot_id] = [];
+      wifiReportsBySpot[w.spot_id].push(w);
+    });
+
     setSpots(
       (spotsData || []).map((row) =>
-        transformSpot(row, commentsBySpot[row.id] || [], latestReportBySpot[row.id] || null)
+        transformSpot(
+          row,
+          commentsBySpot[row.id] || [],
+          latestReportBySpot[row.id] || null,
+          wifiReportsBySpot[row.id] || []
+        )
       )
     );
   };
@@ -175,6 +200,9 @@ export default function App() {
         fetchAllData();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'congestion_reports' }, () => {
+        fetchAllData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wifi_reports' }, () => {
         fetchAllData();
       })
       .subscribe();
@@ -553,7 +581,6 @@ export default function App() {
     if (!currentUser) return;
 
     if (loginRole === 'host') {
-      // 事前に「自分の店舗かどうか」をチェックし、他店舗への更新を未然に防ぐ
       const targetSpot = spots.find((s) => s.id === spotId);
       if (!targetSpot || targetSpot.hostId !== currentUser.id) {
         alert('自分が登録した店舗の混雑状況のみ更新できます。');
@@ -573,7 +600,6 @@ export default function App() {
         return;
       }
 
-      // 0件しか更新されなかった場合（他店舗だった場合）は成功扱いにしない
       if (!data || data.length === 0) {
         alert('更新できませんでした。この店舗はあなたが登録した店舗ではありません。');
         return;
@@ -610,7 +636,6 @@ export default function App() {
       );
       alert(`「${status}」の混雑情報を報告しました！`);
     }
-    // ※ 他のユーザーの画面へはリアルタイム購読を通じて自動反映されます
   };
 
   const handleDeleteReport = async (reportId) => {
@@ -794,6 +819,49 @@ export default function App() {
     setSelectedSpot(null);
   };
 
+  // Wi-Fi速度の実測（Cloudflareの公開スピードテスト用エンドポイントからダウンロードし、
+  // かかった時間から逆算する。ダウンロードするデータ量は約3MB）
+  const measureWifiSpeed = async () => {
+    const TEST_BYTES = 3_000_000; // 約3MB
+    const url = `https://speed.cloudflare.com/__down?bytes=${TEST_BYTES}&cachebust=${Date.now()}`;
+
+    const start = performance.now();
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('ネットワーク応答が正常ではありません');
+    }
+    await response.arrayBuffer();
+    const durationSec = (performance.now() - start) / 1000;
+
+    if (durationSec <= 0) {
+      throw new Error('計測に失敗しました');
+    }
+
+    const mbps = (TEST_BYTES * 8) / durationSec / 1_000_000;
+    return Math.round(mbps * 10) / 10; // 小数点1桁に丸める
+  };
+
+  // 実測ボタンから呼ばれる: 速度を計測し、wifi_reportsに結果を投稿する
+  const handleMeasureWifi = async (spotId) => {
+    if (!currentUser) {
+      alert('ログインすると実測結果を報告できます。');
+      return;
+    }
+
+    const speedMbps = await measureWifiSpeed();
+
+    const { error } = await supabase
+      .from('wifi_reports')
+      .insert({ spot_id: spotId, user_id: currentUser.id, speed_mbps: speedMbps });
+
+    if (error) {
+      throw new Error(`報告に失敗しました: ${error.message}`);
+    }
+
+    return speedMbps;
+    // ※ 表示への反映はリアルタイム購読経由で自動的に行われます
+  };
+
   if (currentScreen === 'index') {
     return (
       <HomeScreen
@@ -874,6 +942,7 @@ export default function App() {
       handleUpdateSpot={handleUpdateSpot}
       handleDeleteSpot={handleDeleteSpot}
       onManualAddSpot={openManualAddSpot}
+      onMeasureWifi={handleMeasureWifi}
     />
   );
 }

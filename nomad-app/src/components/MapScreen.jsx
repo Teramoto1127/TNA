@@ -36,6 +36,7 @@ export default function MapScreen({
   handleUpdateSpot,
   handleDeleteSpot,
   onManualAddSpot,
+  onMeasureWifi,
 }) {
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const activeFilterCount =
@@ -169,6 +170,7 @@ export default function MapScreen({
           canInteract={loginRole === 'host' ? true : isLoggedIn}
           onEditSpot={openEditSpot}
           onDeleteSpot={handleDeleteSpot}
+          onMeasureWifi={onMeasureWifi}
         />
       )}
     </div>

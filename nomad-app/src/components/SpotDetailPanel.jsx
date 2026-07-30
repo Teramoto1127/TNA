@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 function formatDateTime(isoString) {
   if (!isoString) return '';
@@ -30,7 +30,23 @@ export default function SpotDetailPanel({
   canInteract,
   onEditSpot,
   onDeleteSpot,
+  onMeasureWifi,
 }) {
+  const [measuring, setMeasuring] = useState(false);
+  const [measureError, setMeasureError] = useState('');
+
+  const handleMeasureClick = async () => {
+    setMeasuring(true);
+    setMeasureError('');
+    try {
+      await onMeasureWifi(selectedSpot.id);
+    } catch (err) {
+      setMeasureError(err.message || '測定に失敗しました');
+    } finally {
+      setMeasuring(false);
+    }
+  };
+
   const isOwnSpot = loginRole === 'host' && currentUserId && selectedSpot.hostId === currentUserId;
   const isOwnReport = currentUserId && selectedSpot.latestReportUserId === currentUserId;
 
@@ -109,14 +125,43 @@ export default function SpotDetailPanel({
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
         <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', fontSize: '12px', padding: '4px 10px', borderRadius: '6px', fontWeight: '500' }}>
-          📶 Wi-Fi: {selectedSpot.wifiSpeed}
+          📶 公式: {selectedSpot.wifiSpeed}
         </span>
         <span style={{ backgroundColor: '#FFF7ED', color: '#C2410C', fontSize: '12px', padding: '4px 10px', borderRadius: '6px', fontWeight: '500' }}>
           ⚡ {selectedSpot.hasPower ? '電源あり' : '電源なし'}
         </span>
+        {selectedSpot.crowdWifiCount > 0 && (
+          <span style={{ backgroundColor: '#ECFDF5', color: '#047857', fontSize: '12px', padding: '4px 10px', borderRadius: '6px', fontWeight: '500' }}>
+            📊 実測: {selectedSpot.crowdWifiSpeed}Mbps（{selectedSpot.crowdWifiCount}件）
+          </span>
+        )}
       </div>
+
+      {canInteract && (
+        <div style={{ marginBottom: '16px' }}>
+          <button
+            onClick={handleMeasureClick}
+            disabled={measuring}
+            style={{
+              fontSize: '11px',
+              fontWeight: 'bold',
+              color: measuring ? '#9CA3AF' : '#2563EB',
+              background: 'none',
+              border: '1px solid ' + (measuring ? '#E5E7EB' : '#BFDBFE'),
+              borderRadius: '999px',
+              padding: '5px 12px',
+              cursor: measuring ? 'default' : 'pointer',
+            }}
+          >
+            {measuring ? '📶 測定中...（数秒お待ちください）' : '📶 このWi-Fiを測定して報告'}
+          </button>
+          {measureError && (
+            <p style={{ fontSize: '10px', color: '#EF4444', marginTop: '4px' }}>{measureError}</p>
+          )}
+        </div>
+      )}
 
       <hr style={{ border: 'none', borderTop: '1px solid #f3f4f6', margin: '12px 0' }} />
 
