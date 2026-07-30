@@ -52,3 +52,6 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+.env
+.env.local
+.env.*.local
